@@ -80,7 +80,7 @@ def grad_cam_plus(model, img,
     Return:
         A heatmap ndarray(without color).
     """
-    img_tensor = np.expand_dims(img, axis=0)
+    img_tensor = tf.expand_dims(img, axis=0)
 
     conv_layer = model.get_layer(layer_name)
     heatmap_model = Model([model.inputs], [conv_layer.output, model.output])
@@ -94,29 +94,24 @@ def grad_cam_plus(model, img,
                 if label_name:
                     print(label_name[category_id])
                 output = predictions[:, category_id]
-                conv_first_grad = gtape3.gradient(output, conv_output)
-            conv_second_grad = gtape2.gradient(conv_first_grad, conv_output)
-        conv_third_grad = gtape1.gradient(conv_second_grad, conv_output)
-
-    global_sum = np.sum(conv_output, axis=(0, 1, 2))
-
-    alpha_num = conv_second_grad[0]
-    alpha_denom = conv_second_grad[0]*2.0 + conv_third_grad[0]*global_sum
-    alpha_denom = np.where(alpha_denom != 0.0, alpha_denom, 1e-10)
-    
-    alphas = alpha_num/alpha_denom
-    alpha_normalization_constant = np.sum(alphas, axis=(0,1))
-    alphas /= alpha_normalization_constant
-
-    weights = np.maximum(conv_first_grad[0], 0.0)
-
-    deep_linearization_weights = np.sum(weights*alphas, axis=(0,1))
-    grad_CAM_map = np.sum(deep_linearization_weights*conv_output[0], axis=2)
-
-    heatmap = np.maximum(grad_CAM_map, 0)
-    max_heat = np.max(heatmap)
-    if max_heat == 0:
-        max_heat = 1e-10
+            grads1 = gtape3.gradient(output, conv_output)
+        grads2 = gtape2.gradient(grads1, conv_output)
+    grads3 = gtape1.gradient(grads2, conv_output)
+    feat_sum = tf.reduce_sum(conv_output, axis=(1, 2))
+    alpha_denom = grads2*2.0 + grads3*feat_sum
+    alpha_denom = tf.where(alpha_denom != 0.0, alpha_denom, 1)
+    alpha = grads2/alpha_denom
+    # alpha_normalization_constant = tf.reduce_sum(alphas, axis=(1, 2), keepdims=True)
+    alpha_normalization_constant = tf.where(alpha == 0., 1, alpha)
+    alpha /= alpha_normalization_constant
+    weights = tf.reduce_sum(tf.keras.activations.relu(grads1)*alpha, axis=(1, 2), keepdims=True) #weights need to be use reduce sum
+    grad_CAM_map = tf.reduce_sum(weights*conv_output, axis=3, keepdims=True)
+    heatmap = tf.keras.activations.relu(grad_CAM_map)
+    max_heat = tf.reduce_max(heatmap, axis=(1, 2))
+    max_heat = tf.where(max_heat == 0., 1, max_heat)
     heatmap /= max_heat
+    row = 224
+    heatmap = tf.image.resize_with_pad(heatmap, row, row, method='bilinear')
+    print(heatmap.shape)
+    return heatmap.numpy().reshape(224, 224)
 
-    return heatmap
