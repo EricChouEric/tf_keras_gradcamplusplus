@@ -23,7 +23,7 @@ from tensorflow.keras.preprocessing import image
 
 
 def _download_file_from_google_drive(id, destination):
-    """Source: 
+    """Source:
         https://stackoverflow.com/questions/25010369/wget-curl-large-file-from-google-drive).
     """
     def get_confirm_token(response):
@@ -52,7 +52,7 @@ def _download_file_from_google_drive(id, destination):
         params = {"id" : id, "confirm" : token}
         response = session.get(URL, params = params, stream = True)
 
-    save_response_content(response, destination) 
+    save_response_content(response, destination)
 
 
 def vgg16_mura_model(path):
@@ -116,10 +116,12 @@ def show_imgwithheat(img_path, heatmap, alpha=0.4, return_array=False):
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     superimposed_img = heatmap * alpha + img
     superimposed_img = np.clip(superimposed_img, 0, 255).astype("uint8")
-    superimposed_img = cv2.cvtColor(superimposed_img, cv2.COLOR_BGR2RGB)
+    # superimposed_img = cv2.cvtColor(superimposed_img, cv2.COLOR_BGR2RGB)
 
-    imgwithheat = Image.fromarray(superimposed_img)  
-    display(imgwithheat)
+    imgwithheat = np.asarray(Image.fromarray(superimposed_img))
+    # imgwithheat = cv2.resize(imgwithheat, (224, 224))
+    cv2.imshow("heatmap", imgwithheat)
+    cv2.waitKey(0)
 
     if return_array:
         return superimposed_img
